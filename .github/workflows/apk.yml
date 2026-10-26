@@ -45,7 +45,22 @@ jobs:
 
       - name: Add libsamp.so
         run: |
-          cp libsamp.so out/lib/armeabi-v7a/libsamp.so
+          echo "=== repo root ==="
+          ls -l
+          f=$(find . -name libsamp.so -not -path "./out/*" | head -n1)
+          if [ -z "$f" ]; then
+            z=$(find . -iname "libsamp*.zip" -not -path "./out/*" | head -n1)
+            if [ -n "$z" ]; then
+              unzip -o "$z" -d libsamp_unz
+              f=$(find libsamp_unz -name libsamp.so | head -n1)
+            fi
+          fi
+          echo "found: $f"
+          if [ -z "$f" ]; then
+            echo "libsamp.so not found in repo, upload it to the root"
+            exit 1
+          fi
+          cp "$f" out/lib/armeabi-v7a/libsamp.so
 
       - name: Patch smali
         run: |
