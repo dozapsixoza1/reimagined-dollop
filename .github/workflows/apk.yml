@@ -26,12 +26,13 @@ jobs:
           echo "=== libGTASA.so ==="
           ls -l out/lib/armeabi-v7a/libGTASA.so
           md5sum out/lib/armeabi-v7a/libGTASA.so
-          grep -n "targetSdkVersion\|minSdkVersion" out/apktool.yml
+          grep -n "targetSdkVersion" out/apktool.yml || true
 
       - name: Add libsamp.so
-        run: cp libsamp.so out/lib/armeabi-v7a/libsamp.so
+        run: |
+          cp libsamp.so out/lib/armeabi-v7a/libsamp.so
 
-      - name: Patch smali (load libsamp after GTASA)
+      - name: Patch smali
         run: |
           python3 - << 'EOF'
           import re, glob, sys
@@ -50,15 +51,16 @@ jobs:
               done = True
               break
           if not done:
-              print('NOT FOUND, places with "GTASA":')
+              print('NOT FOUND, places with GTASA:')
               for f in glob.glob('out/smali*/**/*.smali', recursive=True):
                   if '"GTASA"' in open(f, encoding='utf-8').read():
                       print(' ', f)
               sys.exit(1)
           EOF
 
-      - name: Raise targetSdk (new Android blocks old apps)
-        run: sed -i "s/targetSdkVersion: '[0-9]*'/targetSdkVersion: '28'/" out/apktool.yml
+      - name: Raise targetSdk
+        run: |
+          sed -i "s/targetSdkVersion: '[0-9]*'/targetSdkVersion: '28'/" out/apktool.yml
 
       - name: Build and sign
         run: |
