@@ -1,0 +1,71 @@
+name: Build client APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download tools
+        run: |
+          wget -q https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
+          wget -q https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O signer.jar
+
+      - name: Decode APK
+        run: |
+          java -jar apktool.jar d -f gta.apk -o out
+          ls out/lib || true
+          echo "=== libGTASA.so ==="
+          ls -l out/lib/armeabi-v7a/libGTASA.so
+          md5sum out/lib/armeabi-v7a/libGTASA.so
+          grep -n "targetSdkVersion\|minSdkVersion" out/apktool.yml
+
+      - name: Add libsamp.so
+        run: cp libsamp.so out/lib/armeabi-v7a/libsamp.so
+
+      - name: Patch smali (load libsamp after GTASA)
+        run: |
+          python3 - << 'EOF'
+          import re, glob, sys
+          pat = re.compile(r'(const-string (\w+), "GTASA"\s*\n\s*invoke-static \{\2\}, Ljava/lang/System;->loadLibrary\(Ljava/lang/String;\)V)')
+          done = False
+          for f in glob.glob('out/smali*/**/*.smali', recursive=True):
+              s = open(f, encoding='utf-8').read()
+              m = pat.search(s)
+              if not m:
+                  continue
+              reg = m.group(2)
+              add = '\n\n    const-string %s, "samp"\n    invoke-static {%s}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V' % (reg, reg)
+              s = s[:m.end()] + add + s[m.end():]
+              open(f, 'w', encoding='utf-8').write(s)
+              print('patched', f)
+              done = True
+              break
+          if not done:
+              print('NOT FOUND, places with "GTASA":')
+              for f in glob.glob('out/smali*/**/*.smali', recursive=True):
+                  if '"GTASA"' in open(f, encoding='utf-8').read():
+                      print(' ', f)
+              sys.exit(1)
+          EOF
+
+      - name: Raise targetSdk (new Android blocks old apps)
+        run: sed -i "s/targetSdkVersion: '[0-9]*'/targetSdkVersion: '28'/" out/apktool.yml
+
+      - name: Build and sign
+        run: |
+          java -jar apktool.jar b out -o unsigned.apk
+          java -jar signer.jar -a unsigned.apk --allowResign -o signed
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-apk
+          path: signed/*.apk
