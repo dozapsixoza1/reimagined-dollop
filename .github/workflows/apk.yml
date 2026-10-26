@@ -16,6 +16,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Prepare gta.apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f flinrp_full.apk ]; then
+            cp flinrp_full.apk gta.apk
+          else
+            gh release download v1 -p flinrp_full.apk
+            cp flinrp_full.apk gta.apk
+          fi
+          ls -l gta.apk
+
       - name: Download tools
         run: |
           wget -q https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
@@ -24,7 +36,8 @@ jobs:
       - name: Decode APK
         run: |
           java -jar apktool.jar d -f gta.apk -o out
-          ls out/lib || true
+          echo "=== libs ==="
+          ls -lR out/lib || true
           echo "=== libGTASA.so ==="
           ls -l out/lib/armeabi-v7a/libGTASA.so
           md5sum out/lib/armeabi-v7a/libGTASA.so
